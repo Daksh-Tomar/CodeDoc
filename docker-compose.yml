@@ -1,0 +1,27 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: codedoc-db
+    environment:
+      POSTGRES_USER: codedoc
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: codedoc
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: codedoc-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redisdata:/data
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
