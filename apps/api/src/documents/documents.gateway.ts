@@ -13,9 +13,31 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { WsJwtGuard } from '../auth/ws-jwt.guard';
 
+interface CursorPosition {
+  lineNumber: number;
+  column: number;
+  selectionStartLineNumber?: number;
+  selectionStartColumn?: number;
+}
+
+interface ActiveUser {
+  socketId: string;
+  userId: string;
+  email: string;
+  color: string;
+  cursor: CursorPosition | null;
+  documentId: string;
+}
+
+const COLORS = [
+  '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', 
+  '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', 
+  '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#f43f5e'
+];
+
 @WebSocketGateway({
   cors: {
-    origin: '*', // Should be configured based on frontend URL
+    origin: '*',
   },
 })
 export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnect {
@@ -23,6 +45,7 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
   server: Server;
 
   private readonly logger = new Logger(DocumentsGateway.name);
+  private activeUsers = new Map<string, ActiveUser>();
 
   constructor(
     private readonly jwtService: JwtService,
@@ -49,6 +72,66 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   handleDisconnect(client: Socket) {
     this.logger.log(`Client disconnected: ${client.id}`);
+    const user = this.activeUsers.get(client.id);
+    if (user) {
+      this.activeUsers.delete(client.id);
+      this.broadcastActiveUsers(user.documentId);
+    }
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('joinDocument')
+  handleJoinDocument(
+    @MessageBody() data: { documentId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    client.join(data.documentId);
+    const userId = client.data.user.sub;
+    const email = client.data.user.email;
+    
+    // Pick a deterministic color based on userId length or hash, or just random
+    // We will use a random pleasant color
+    const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+
+    this.activeUsers.set(client.id, {
+      socketId: client.id,
+      userId,
+      email,
+      color,
+      cursor: null,
+      documentId: data.documentId,
+    });
+
+    this.broadcastActiveUsers(data.documentId);
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('leaveDocument')
+  handleLeaveDocument(
+    @MessageBody() data: { documentId: string },
+    @ConnectedSocket() client: Socket,
+  ) {
+    client.leave(data.documentId);
+    this.activeUsers.delete(client.id);
+    this.broadcastActiveUsers(data.documentId);
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('cursorMove')
+  handleCursorMove(
+    @MessageBody() data: { documentId: string; cursor: CursorPosition },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const user = this.activeUsers.get(client.id);
+    if (user) {
+      user.cursor = data.cursor;
+      // Broadcast cursor to everyone else in the document
+      client.to(data.documentId).emit('cursorMoved', {
+        userId: user.userId,
+        socketId: client.id,
+        cursor: data.cursor,
+      });
+    }
   }
 
   @UseGuards(WsJwtGuard)
@@ -57,20 +140,23 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
     @MessageBody() data: { documentId: string; content: string },
     @ConnectedSocket() client: Socket,
   ) {
-    this.logger.log(`Saving document ${data.documentId} by user ${client.data.user?.sub}`);
-    
     try {
       await this.prisma.fileNode.update({
         where: { id: data.documentId },
         data: { content: data.content },
       });
-      // Optionally broadcast to other clients in a room
-      // client.to(data.documentId).emit('documentUpdated', data);
       return { event: 'saveSuccess', data: { documentId: data.documentId } };
     } catch (error) {
       this.logger.error(`Error saving document ${data.documentId}: ${error.message}`);
       return { event: 'saveError', data: { message: 'Failed to save document' } };
     }
+  }
+
+  private broadcastActiveUsers(documentId: string) {
+    const usersInDoc = Array.from(this.activeUsers.values()).filter(
+      (u) => u.documentId === documentId
+    );
+    this.server.to(documentId).emit('activeUsers', usersInDoc);
   }
 
   private extractTokenFromSocket(client: Socket): string | undefined {
