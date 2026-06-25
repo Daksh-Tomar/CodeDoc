@@ -29,7 +29,7 @@ export default function Home() {
           </div>
         </div>
         <div className="flex-1 p-4 bg-zinc-950">
-          <Editor initialContent="// Welcome to CodeDoc Workspace" language="typescript" />
+          <Editor documentId="f6dbca00-6931-49d7-854d-1d5d1e5ab81a" initialContent="// Welcome to CodeDoc Workspace" language="typescript" />
         </div>
       </main>
     </div>

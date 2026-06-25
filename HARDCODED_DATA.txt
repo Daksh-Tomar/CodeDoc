@@ -1,0 +1,21 @@
+This file tracks all the hardcoded/dummy data and configurations introduced for testing during early development phases. 
+These MUST be removed or replaced with proper dynamic/production configurations before the project is finished.
+
+1. apps/web/src/hooks/useDocumentSocket.ts
+   - Hardcoded JWT Token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI2ODQ5ZmZjMy00MDVjLTQ5MjctOWRhZi0wYmYxYzdmNGViMjkiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJpYXQiOjE3ODIzNzg3MDgsImV4cCI6MTc4MjQ2NTEwOH0.pCdjIdKqVUmp4zgP1ha0Wt-_RH3PKXL-YTNwfEtowPg'
+   - Action: Replace with dynamic token retrieval from auth context or localStorage after login system is built.
+
+2. apps/web/src/app/page.tsx
+   - Hardcoded Document ID: 'f6dbca00-6931-49d7-854d-1d5d1e5ab81a'
+   - Action: Replace with dynamic document ID passed down from routing/URL parameters when a user clicks on a file in the explorer.
+
+3. apps/api/src/auth/auth.module.ts
+   - Hardcoded JWT Secret Fallback: 'super-secret'
+   - Action: Ensure `JWT_SECRET` is strictly read from environment variables in production and remove the fallback.
+
+4. apps/api/seed.ts
+   - Action: This entire script is meant for generating dummy data. It can be deleted entirely once the frontend is capable of creating users, workspaces, projects, and files dynamically.
+
+5. Database / Prisma
+   - The test user 'test@example.com', 'Test Workspace', 'Test Project', and 'main.ts' were inserted purely for testing the WebSocket save pipeline. 
+   - Action: Clear the database before production launch.
