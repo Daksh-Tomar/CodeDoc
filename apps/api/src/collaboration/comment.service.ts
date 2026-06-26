@@ -7,10 +7,11 @@ export class CommentService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async createThread(fileNodeId: string, userId: string, lineNumber: number, content: string) {
+  async createThread(filePath: string, projectId: string, userId: string, lineNumber: number, content: string) {
     const thread = await this.prisma.commentThread.create({
       data: {
-        fileNodeId,
+        filePath,
+        projectId,
         lineNumber,
         comments: {
           create: {
@@ -21,7 +22,7 @@ export class CommentService {
       },
       include: { comments: { include: { user: { select: { name: true } } } } }
     });
-    this.logger.log(`Thread created on file ${fileNodeId} line ${lineNumber}`);
+    this.logger.log(`Thread created on file ${filePath} line ${lineNumber}`);
     return thread;
   }
 
@@ -43,9 +44,9 @@ export class CommentService {
     });
   }
 
-  async getThreadsForFile(fileNodeId: string) {
+  async getThreadsForFile(filePath: string) {
     return this.prisma.commentThread.findMany({
-      where: { fileNodeId },
+      where: { filePath },
       include: {
         comments: {
           include: { user: { select: { name: true, email: true } } },

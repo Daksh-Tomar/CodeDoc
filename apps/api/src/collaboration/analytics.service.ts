@@ -19,12 +19,7 @@ export class AnalyticsService {
       select: { id: true }
     });
     
-    let totalFiles = 0;
-    if (projects.length > 0) {
-      totalFiles = await this.prisma.fileNode.count({
-        where: { projectId: { in: projects.map(p => p.id) }, type: 'FILE' }
-      });
-    }
+    let totalFiles = 0; // Not querying DB anymore since files are on physical disk
 
     return {
       activeUsers: totalMembers,

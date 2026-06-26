@@ -26,13 +26,14 @@ interface UseDocumentSocketProps {
   url?: string;
 }
 
-export const defaultToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1Y2MwMDQyNC1lMTczLTRmOTYtODFlYy01MzY2YzY4YmYyZTgiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJpYXQiOjE3ODIzODE2NjcsImV4cCI6MTc4MjQ2ODA2N30.deVnwUVhYM0FzWW7gCmd6eJE_KDo-1iqpU9_14ocf1I';
+export const defaultToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzYzE3NzA2My1hODk4LTQ5ZjktYWZmMS1kZmVjNjJmMGYyZjkiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJpYXQiOjE3ODI0Nzg1MTIsImV4cCI6MTc4MjU2NDkxMn0.Fvc8N4gPxe_hm8Z5guxt-cIouGbXn4PsqC5AdaI2s8I';
 
 export function useDocumentSocket({ projectId, workspaceId, documentId, url = 'http://localhost:3001' }: UseDocumentSocketProps) {
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [activeUsers, setActiveUsers] = useState<ActiveUser[]>([]);
   const [projectUsers, setProjectUsers] = useState<ActiveUser[]>([]);
+  const [fileSystemEvent, setFileSystemEvent] = useState<{ type: string; path: string; timestamp: number } | null>(null);
   
   const currentDocIdRef = useRef<string | null>(null);
 
@@ -71,6 +72,10 @@ export function useDocumentSocket({ projectId, workspaceId, documentId, url = 'h
       setProjectUsers(users);
     });
 
+    socket.on('fileSystemEvent', (event) => {
+      setFileSystemEvent({ ...event, timestamp: Date.now() });
+    });
+
     return () => {
       if (currentDocIdRef.current) {
         socket.emit('leaveDocument', { documentId: currentDocIdRef.current, workspaceId });
@@ -99,5 +104,6 @@ export function useDocumentSocket({ projectId, workspaceId, documentId, url = 'h
     isConnected,
     activeUsers,
     projectUsers,
+    fileSystemEvent,
   };
 }

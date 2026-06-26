@@ -67,6 +67,23 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
   ) {
     // Auto-save all dirty documents to filesystem every 5 seconds
     this.saveInterval = setInterval(() => this.saveAllDocuments(), 5000);
+
+    // Broadcast workspace filesystem events to connected clients
+    this.workspaceService.on('fileSystemEvent', async (event: { workspaceId: string; type: string; path: string }) => {
+      // Find the associated project(s) for this workspace
+      const projects = await this.prisma.project.findMany({
+        where: { workspaceId: event.workspaceId },
+        select: { id: true }
+      });
+      
+      for (const project of projects) {
+        this.server.to(`project:${project.id}`).emit('fileSystemEvent', {
+          type: event.type,
+          path: event.path,
+          workspaceId: event.workspaceId
+        });
+      }
+    });
   }
 
   async saveAllDocuments() {

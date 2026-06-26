@@ -20,7 +20,7 @@ export class ActivityService {
     userId: string,
     type: ActivityType,
     description: string,
-    fileNodeId?: string,
+    filePath?: string,
     diffText?: string
   ) {
     let aiSummary: string | undefined = undefined;
@@ -35,12 +35,11 @@ export class ActivityService {
         userId,
         type,
         description,
-        fileNodeId,
+        filePath,
         aiSummary
       },
       include: {
-        user: { select: { id: true, name: true, email: true } },
-        fileNode: { select: { id: true, name: true } }
+        user: { select: { id: true, name: true, email: true } }
       }
     });
 
@@ -53,8 +52,7 @@ export class ActivityService {
       where: { workspaceId },
       orderBy: { createdAt: 'desc' },
       include: {
-        user: { select: { id: true, name: true, email: true } },
-        fileNode: { select: { id: true, name: true } }
+        user: { select: { id: true, name: true, email: true } }
       }
     });
   }

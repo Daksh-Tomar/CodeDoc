@@ -13,13 +13,14 @@ interface Message {
 }
 
 interface AiChatSidebarProps {
-  documentId: string;
+  projectId: string;
+  filePath: string;
   token: string | null;
   onClose: () => void;
   getEditorContext: () => any;
 }
 
-export function AiChatSidebar({ documentId, token, onClose, getEditorContext }: AiChatSidebarProps) {
+export function AiChatSidebar({ projectId, filePath, token, onClose, getEditorContext }: AiChatSidebarProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -27,7 +28,7 @@ export function AiChatSidebar({ documentId, token, onClose, getEditorContext }: 
 
   // Fetch history on mount
   useEffect(() => {
-    if (!token || !documentId) return;
+    if (!token || !filePath) return;
 
     fetch('http://localhost:3001/ai/history', {
       method: 'POST',
@@ -35,7 +36,7 @@ export function AiChatSidebar({ documentId, token, onClose, getEditorContext }: 
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`
       },
-      body: JSON.stringify({ documentId })
+      body: JSON.stringify({ projectId, filePath })
     })
       .then(res => res.json())
       .then(data => {
@@ -44,7 +45,7 @@ export function AiChatSidebar({ documentId, token, onClose, getEditorContext }: 
         }
       })
       .catch(console.error);
-  }, [token, documentId]);
+  }, [token, projectId, filePath]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -76,7 +77,8 @@ export function AiChatSidebar({ documentId, token, onClose, getEditorContext }: 
           Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({
-          documentId,
+          projectId,
+          filePath,
           prompt: userMessage.content,
           context
         })

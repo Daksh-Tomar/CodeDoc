@@ -15,8 +15,8 @@ import { useDocumentSocket, defaultToken } from "@/hooks/useDocumentSocket";
 import { FileTree } from "@/components/FileTree";
 
 export default function Home() {
-  const projectId = "2d7681d3-160b-4580-9d98-bb964cb63c3d";
-  const workspaceId = "default-workspace";
+  const projectId = "a9a6efc8-6577-4512-84b8-157b8d02e246";
+  const workspaceId = "477f8082-8390-4a50-ad5a-0dd1fa0c93f0";
   const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
   const [activeFileName, setActiveFileName] = useState("main.ts");
   const [teamViewEnabled, setTeamViewEnabled] = useState(true);
@@ -26,7 +26,7 @@ export default function Home() {
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const editorRef = useRef<any>(null);
   
-  const { socket, isConnected, activeUsers, projectUsers } = useDocumentSocket({ projectId, workspaceId, documentId: activeDocumentId });
+  const { socket, isConnected, activeUsers, projectUsers, fileSystemEvent } = useDocumentSocket({ projectId, workspaceId, documentId: activeDocumentId });
 
   // Fetch the active file name whenever activeDocumentId changes
   useEffect(() => {
@@ -80,6 +80,7 @@ export default function Home() {
             projectUsers={projectUsers} 
             activeDocumentId={activeDocumentId}
             onFileSelect={(fileId) => setActiveDocumentId(fileId)}
+            fileSystemEvent={fileSystemEvent}
           />
         </div>
       </aside>
@@ -199,7 +200,8 @@ export default function Home() {
             
             {isChatOpen && (
               <AiChatSidebar 
-                documentId={activeDocumentId || ''}
+                projectId={projectId}
+                filePath={activeDocumentId || ''}
                 token={typeof window !== 'undefined' ? (localStorage.getItem('test_jwt_token') || localStorage.getItem('jwt_token') || defaultToken) : defaultToken}
                 onClose={() => setIsChatOpen(false)}
                 getEditorContext={getEditorContext}

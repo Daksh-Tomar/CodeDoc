@@ -1,14 +1,24 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, OnModuleDestroy } from '@nestjs/common';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as chokidar from 'chokidar';
+import { EventEmitter } from 'events';
 
 @Injectable()
-export class WorkspaceService {
+export class WorkspaceService extends EventEmitter implements OnModuleDestroy {
   private readonly logger = new Logger(WorkspaceService.name);
   private readonly workspacesRoot = path.join('c:', 'Users', 'todak', 'Desktop', 'CodeDoc', 'workspaces');
+  private watchers = new Map<string, chokidar.FSWatcher>();
 
   constructor() {
+    super();
     this.ensureWorkspacesRoot();
+  }
+
+  async onModuleDestroy() {
+    for (const watcher of this.watchers.values()) {
+      await watcher.close();
+    }
   }
 
   private async ensureWorkspacesRoot() {
@@ -43,15 +53,52 @@ export class WorkspaceService {
     try {
       await fs.mkdir(workspacePath, { recursive: true });
       this.logger.log(`Created workspace directory for ${workspaceId}`);
+      this.watchWorkspace(workspaceId);
     } catch (error) {
       this.logger.error(`Failed to create workspace ${workspaceId}`, error);
       throw error;
     }
   }
 
+  watchWorkspace(workspaceId: string) {
+    if (this.watchers.has(workspaceId)) return;
+    
+    const workspacePath = this.getWorkspacePath(workspaceId);
+    const watcher = chokidar.watch(workspacePath, {
+      ignoreInitial: true,
+      persistent: true,
+    });
+
+    watcher.on('all', (event, filePath) => {
+      // Map chokidar events to our standard events
+      let customEvent = '';
+      if (event === 'add' || event === 'addDir') customEvent = 'FILE_CREATED';
+      else if (event === 'unlink' || event === 'unlinkDir') customEvent = 'FILE_DELETED';
+      else if (event === 'change') customEvent = 'FILE_MODIFIED';
+      
+      if (customEvent) {
+        // Compute relative path
+        const relativePath = path.relative(workspacePath, filePath).replace(/\\/g, '/');
+        this.emit('fileSystemEvent', {
+          workspaceId,
+          type: customEvent,
+          path: relativePath,
+        });
+      }
+    });
+
+    this.watchers.set(workspaceId, watcher);
+    this.logger.log(`Started watching workspace ${workspaceId}`);
+  }
+
   async deleteWorkspace(workspaceId: string): Promise<void> {
     const workspacePath = this.getWorkspacePath(workspaceId);
     try {
+      const watcher = this.watchers.get(workspaceId);
+      if (watcher) {
+        await watcher.close();
+        this.watchers.delete(workspaceId);
+      }
       await fs.rm(workspacePath, { recursive: true, force: true });
       this.logger.log(`Deleted workspace directory for ${workspaceId}`);
     } catch (error) {

@@ -5,7 +5,8 @@ import type { Request } from 'express';
 import { JwtService } from '@nestjs/jwt';
 
 interface ChatRequestDto {
-  documentId: string;
+  projectId: string;
+  filePath: string;
   prompt: string;
   context: {
     fileName: string;
@@ -45,10 +46,10 @@ export class AiController {
     @Body() body: ChatRequestDto
   ) {
     const userId = this.extractUserIdFromRequest(req);
-    const { documentId, prompt, context } = body;
+    const { projectId, filePath, prompt, context } = body;
 
     // 1. Get or create session
-    const session = await this.aiService.getOrCreateSession(userId, documentId);
+    const session = await this.aiService.getOrCreateSession(userId, projectId, filePath);
 
     // 2. Save user prompt
     await this.aiService.addMessage(session.id, 'user', prompt);
@@ -77,10 +78,10 @@ export class AiController {
   @Post('history')
   async getHistory(
     @Req() req: Request,
-    @Body() body: { documentId: string }
+    @Body() body: { projectId: string; filePath: string }
   ) {
     const userId = this.extractUserIdFromRequest(req);
-    const session = await this.aiService.getOrCreateSession(userId, body.documentId);
+    const session = await this.aiService.getOrCreateSession(userId, body.projectId, body.filePath);
     const messages = await this.aiService.getMessages(session.id);
     return messages;
   }

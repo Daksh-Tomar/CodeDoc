@@ -20,14 +20,14 @@ export class AiService {
   /**
    * Retrieves or creates a chat session for a user on a specific document.
    */
-  async getOrCreateSession(userId: string, documentId: string) {
+  async getOrCreateSession(userId: string, projectId: string, filePath: string) {
     let session = await this.prisma.aIChatSession.findFirst({
-      where: { userId, documentId },
+      where: { userId, projectId, filePath },
     });
 
     if (!session) {
       session = await this.prisma.aIChatSession.create({
-        data: { userId, documentId },
+        data: { userId, projectId, filePath },
       });
     }
 

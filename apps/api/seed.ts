@@ -11,7 +11,7 @@ async function main() {
 
   console.log('Seeding database...');
   
-  await prisma.fileNode.deleteMany({});
+
   await prisma.project.deleteMany({});
   await prisma.workspace.deleteMany({});
   await prisma.user.deleteMany({});
@@ -38,14 +38,7 @@ async function main() {
     }
   });
 
-  const file = await prisma.fileNode.create({
-    data: {
-      name: 'main.ts',
-      type: 'FILE',
-      content: '// Welcome to CodeDoc Workspace\n// hello theere',
-      projectId: project.id,
-    }
-  });
+
 
   const user2 = await prisma.user.create({
     data: {
@@ -59,7 +52,7 @@ async function main() {
   const token2 = jwt.sign({ sub: user2.id, email: user2.email }, process.env.JWT_SECRET || 'super-secret-jwt-key-for-codedoc', { expiresIn: '1d' });
 
   console.log('--- SEED SUCCESS ---');
-  console.log('DOCUMENT_ID:', file.id);
+  console.log('PROJECT_ID:', project.id);
   console.log('JWT_TOKEN (User 1):', token);
   console.log('JWT_TOKEN_2 (User 2):', token2);
 }

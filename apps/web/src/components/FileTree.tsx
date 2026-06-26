@@ -15,9 +15,10 @@ interface FileTreeProps {
   projectUsers: ActiveUser[];
   activeDocumentId: string | null;
   onFileSelect: (fileId: string) => void;
+  fileSystemEvent?: { type: string; path: string; timestamp: number } | null;
 }
 
-export function FileTree({ projectId, projectUsers, activeDocumentId, onFileSelect }: FileTreeProps) {
+export function FileTree({ projectId, projectUsers, activeDocumentId, onFileSelect, fileSystemEvent }: FileTreeProps) {
   const [files, setFiles] = useState<FileNode[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -51,6 +52,12 @@ export function FileTree({ projectId, projectUsers, activeDocumentId, onFileSele
       fetchFiles();
     }
   }, [projectId]);
+
+  useEffect(() => {
+    if (fileSystemEvent) {
+      fetchFiles();
+    }
+  }, [fileSystemEvent]);
 
   const toggleFolder = (folderId: string) => {
     const next = new Set(expandedFolders);
