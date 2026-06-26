@@ -58,4 +58,16 @@ export class ActivityService {
       }
     });
   }
+
+  async getProjectTimeline(projectId: string) {
+    // Find the workspace ID for this project first
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { workspaceId: true }
+    });
+    
+    if (!project) return [];
+
+    return this.getWorkspaceTimeline(project.workspaceId);
+  }
 }

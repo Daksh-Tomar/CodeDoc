@@ -3,7 +3,6 @@
 import { useState, useRef } from "react";
 import dynamic from 'next/dynamic';
 import { AiChatSidebar } from '@/components/AiChatSidebar';
-import { Notifications } from '@/components/Notifications';
 import { ActivityFeed } from '@/components/ActivityFeed';
 import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
 const Editor = dynamic(() => import('@/components/Editor').then(mod => mod.Editor), {
@@ -13,9 +12,13 @@ const TerminalPanel = dynamic(() => import('@/components/TerminalPanel').then(mo
   ssr: false,
 });
 import { useDocumentSocket, defaultToken } from "@/hooks/useDocumentSocket";
+import { FileTree } from "@/components/FileTree";
+import { useEffect } from "react";
 
 export default function Home() {
-  const documentId = "a0ddcbc3-9105-47ec-bae2-beaf0f4547ce";
+  const projectId = "2d7681d3-160b-4580-9d98-bb964cb63c3d";
+  const [activeDocumentId, setActiveDocumentId] = useState<string | null>("a0ddcbc3-9105-47ec-bae2-beaf0f4547ce");
+  const [activeFileName, setActiveFileName] = useState("main.ts");
   const [teamViewEnabled, setTeamViewEnabled] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
@@ -23,7 +26,23 @@ export default function Home() {
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const editorRef = useRef<any>(null);
   
-  const { socket, isConnected, activeUsers } = useDocumentSocket({ documentId });
+  const { socket, isConnected, activeUsers, projectUsers } = useDocumentSocket({ projectId, documentId: activeDocumentId });
+
+  // Fetch the active file name whenever activeDocumentId changes
+  useEffect(() => {
+    if (!activeDocumentId) return;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('test_jwt_token') || defaultToken : defaultToken;
+    fetch(`http://localhost:3001/projects/${projectId}/files/${activeDocumentId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data && data.name) {
+        setActiveFileName(data.name);
+      }
+    })
+    .catch(console.error);
+  }, [activeDocumentId, projectId]);
 
   // Function to extract rich context from Monaco
   const getEditorContext = () => {
@@ -40,7 +59,7 @@ export default function Home() {
     }
 
     return {
-      fileName: 'main.ts',
+      fileName: activeFileName,
       documentContent: model?.getValue() || '',
       cursorLine: position?.lineNumber || 1,
       cursorColumn: position?.column || 1,
@@ -56,13 +75,12 @@ export default function Home() {
           <h1 className="font-bold text-lg tracking-tight">CodeDoc</h1>
         </div>
         <div className="flex-1 p-2 overflow-y-auto">
-          <div className="text-sm font-medium text-zinc-400 mb-2 px-2 uppercase tracking-wider">Explorer</div>
-          <div className="space-y-1">
-            <div className="px-2 py-1 hover:bg-zinc-800 rounded cursor-pointer text-sm flex items-center gap-2 text-blue-400 bg-zinc-800/50">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-              main.ts
-            </div>
-          </div>
+          <FileTree 
+            projectId={projectId} 
+            projectUsers={projectUsers} 
+            activeDocumentId={activeDocumentId}
+            onFileSelect={(fileId) => setActiveDocumentId(fileId)}
+          />
         </div>
       </aside>
 
@@ -72,7 +90,7 @@ export default function Home() {
         <div className="h-14 border-b border-zinc-800 bg-zinc-950 flex items-center px-6 justify-between">
           <div className="flex items-center gap-4">
             <div className="flex -space-x-2">
-              {activeUsers.map(user => (
+              {projectUsers.map(user => (
                 <div 
                   key={user.socketId}
                   className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 border-zinc-950 text-white"
@@ -83,9 +101,9 @@ export default function Home() {
                 </div>
               ))}
             </div>
-            {activeUsers.length > 0 && (
+            {projectUsers.length > 0 && (
               <span className="text-sm text-zinc-400">
-                {activeUsers.length} user{activeUsers.length !== 1 ? 's' : ''} online
+                {projectUsers.length} user{projectUsers.length !== 1 ? 's' : ''} online
               </span>
             )}
           </div>
@@ -140,8 +158,6 @@ export default function Home() {
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
               AI Assistant
             </button>
-
-            <Notifications />
           </div>
         </div>
 
@@ -149,30 +165,41 @@ export default function Home() {
 
         {/* Tabs */}
         <div className="h-10 border-b border-zinc-800 bg-zinc-900 flex items-center px-4 gap-2">
-          <div className="px-4 py-1.5 bg-zinc-800 text-sm rounded-t-md border-t border-blue-500 text-zinc-200">
-            main.ts
-          </div>
+          {activeDocumentId ? (
+            <div className="px-4 py-1.5 bg-zinc-800 text-sm rounded-t-md border-t border-blue-500 text-zinc-200">
+              {activeFileName}
+            </div>
+          ) : (
+            <div className="text-sm text-zinc-500">No file selected</div>
+          )}
         </div>
         
         {/* Editor Wrapper */}
         <div className="flex-1 bg-zinc-950 relative flex flex-col overflow-hidden">
           <div className="flex-1 min-h-0 flex p-4 pb-0">
             <div className="flex-1 min-w-0">
-              <Editor 
-                documentId={documentId} 
-                initialContent="// Welcome to CodeDoc Workspace" 
-                language="typescript" 
-                socket={socket}
-                isConnected={isConnected}
-                activeUsers={activeUsers}
-                teamViewEnabled={teamViewEnabled}
-                editorRef={editorRef}
-              />
+              {activeDocumentId ? (
+                <Editor 
+                  key={activeDocumentId}
+                  documentId={activeDocumentId} 
+                  initialContent="// Select a file or start typing" 
+                  language={activeFileName.endsWith('.ts') || activeFileName.endsWith('.tsx') ? 'typescript' : 'javascript'} 
+                  socket={socket}
+                  isConnected={isConnected}
+                  activeUsers={activeUsers}
+                  teamViewEnabled={teamViewEnabled}
+                  editorRef={editorRef}
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-zinc-500">
+                  Select a file from the explorer to start editing
+                </div>
+              )}
             </div>
             
             {isChatOpen && (
               <AiChatSidebar 
-                documentId={documentId}
+                documentId={activeDocumentId || ''}
                 token={typeof window !== 'undefined' ? (localStorage.getItem('test_jwt_token') || localStorage.getItem('jwt_token') || defaultToken) : defaultToken}
                 onClose={() => setIsChatOpen(false)}
                 getEditorContext={getEditorContext}
@@ -180,7 +207,7 @@ export default function Home() {
             )}
 
             {isActivityOpen && (
-              <ActivityFeed workspaceId="default-workspace" />
+              <ActivityFeed projectId={projectId} socket={socket} />
             )}
           </div>
           

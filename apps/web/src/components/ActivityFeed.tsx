@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
+import { Socket } from 'socket.io-client';
+
 type Activity = {
   id: string;
   type: string;
@@ -10,25 +12,34 @@ type Activity = {
   fileNode?: { name: string };
 };
 
-export function ActivityFeed({ workspaceId }: { workspaceId: string }) {
+export function ActivityFeed({ projectId, socket }: { projectId: string, socket: Socket | null }) {
   const [activities, setActivities] = useState<Activity[]>([]);
 
   useEffect(() => {
-    // In a real implementation, this would fetch from the backend ActivityService API
-    // e.g. fetch(`/api/workspaces/${workspaceId}/activities`)
-    // Mocking for now to demonstrate UI
-    setActivities([
-      {
-        id: '1',
-        type: 'FILE_MODIFIED',
-        description: 'Updated authentication logic',
-        aiSummary: 'Implemented robust error handling for login edge cases.',
-        createdAt: new Date().toISOString(),
-        user: { name: 'Daksh', email: 'daksh@example.com' },
-        fileNode: { name: 'auth.ts' }
-      }
-    ]);
-  }, [workspaceId]);
+    // Fetch initial activities
+    fetch(`http://localhost:3001/projects/${projectId}/activities`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setActivities(data);
+        }
+      })
+      .catch(err => console.error("Failed to fetch activities:", err));
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleNewActivity = (activity: Activity) => {
+      setActivities(prev => [activity, ...prev]);
+    };
+
+    socket.on('newActivity', handleNewActivity);
+
+    return () => {
+      socket.off('newActivity', handleNewActivity);
+    };
+  }, [socket]);
 
   return (
     <div className="w-80 h-full bg-[#1e1e1e] border-l border-[#333] flex flex-col">

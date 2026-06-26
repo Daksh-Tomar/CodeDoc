@@ -50,14 +50,15 @@ export function Editor({
 
     let css = '';
     activeUsers.forEach(user => {
+      if (user.socketId === socket?.id) return;
       // The cursor caret
       css += `
-        .remote-cursor-${user.userId} {
+        .remote-cursor-${user.socketId} {
           border-left: 2px solid ${user.color};
           position: relative;
           z-index: 9;
         }
-        .remote-cursor-${user.userId}::after {
+        .remote-cursor-${user.socketId}::after {
           content: '${user.email.split('@')[0]}';
           position: absolute;
           top: -18px;
@@ -70,13 +71,13 @@ export function Editor({
           white-space: nowrap;
           pointer-events: none;
         }
-        .remote-selection-${user.userId} {
+        .remote-selection-${user.socketId} {
           background-color: ${user.color}40; /* 40 is hex for 25% opacity */
         }
       `;
     });
     styleEl.innerHTML = css;
-  }, [activeUsers]);
+  }, [activeUsers, socket]);
 
   const currentSocketRef = useRef<Socket | null>(socket);
 
@@ -98,7 +99,11 @@ export function Editor({
     
     const handleYjsInit = (data: { documentId: string, update: number[] }) => {
       if (data.documentId !== documentId) return;
-      Y.applyUpdate(ydoc, new Uint8Array(data.update), 'server');
+      Y.applyUpdate(ydoc, new Uint8Array(data.update), 'socket');
+
+      // Sync local state back to server to resolve any offline edits or server restarts!
+      const localState = Y.encodeStateAsUpdate(ydoc);
+      socket.emit('yjsUpdate', { documentId: documentId, update: Array.from(localState) });
     };
 
     const handleYjsUpdate = (data: { documentId: string, update: number[] }) => {
@@ -108,6 +113,9 @@ export function Editor({
 
     socket.on('yjsInit', handleYjsInit);
     socket.on('yjsUpdate', handleYjsUpdate);
+
+    // Request full state now that listeners are attached
+    socket.emit('requestYjsInit', { documentId });
 
     return () => {
       ydoc.off('update', handleLocalUpdate);
@@ -120,8 +128,8 @@ export function Editor({
   useEffect(() => {
     if (!socket) return;
 
-    const handleCursorMoved = (data: { userId: string, cursor: CursorPosition }) => {
-      remoteCursorsRef.current[data.userId] = data.cursor;
+    const handleCursorMoved = (data: { userId: string, socketId: string, cursor: CursorPosition }) => {
+      remoteCursorsRef.current[data.socketId] = data.cursor;
       updateDecorations();
     };
 
@@ -141,9 +149,11 @@ export function Editor({
     }
 
     const newDecorations: any[] = [];
+    console.log("Updating decorations. Active users:", activeUsers.map(u => u.socketId), "Remote cursors:", remoteCursorsRef.current);
 
     activeUsers.forEach(user => {
-      const pos = remoteCursorsRef.current[user.userId];
+      if (user.socketId === socket?.id) return;
+      const pos = remoteCursorsRef.current[user.socketId];
       if (!pos) return;
 
       // Add selection highlight if there is a selection
@@ -157,16 +167,17 @@ export function Editor({
             pos.column
           ),
           options: {
-            className: `remote-selection-${user.userId}`,
+            className: `remote-selection-${user.socketId}`,
           }
         });
       }
 
       // Add the caret cursor
+      // We expand the range by 1 column so Monaco definitely creates a DOM element
       newDecorations.push({
-        range: new monacoRef.current.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column),
+        range: new monacoRef.current.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column + 1),
         options: {
-          className: `remote-cursor-${user.userId}`,
+          className: `remote-cursor-${user.socketId}`,
           stickiness: monacoRef.current.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
         }
       });
@@ -221,13 +232,18 @@ export function Editor({
 
   useEffect(() => {
     updateDecorations();
-  }, [teamViewEnabled]);
+  }, [teamViewEnabled, activeUsers]);
 
   // Clean up binding on unmount
   useEffect(() => {
     return () => {
       if (bindingRef.current) {
-        bindingRef.current.destroy();
+        try {
+          bindingRef.current.destroy();
+        } catch (e) {
+          console.warn("Yjs binding destroy warning:", e);
+        }
+        bindingRef.current = null;
       }
     };
   }, []);
