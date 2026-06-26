@@ -14,7 +14,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  workspaces Workspace[]
+  workspaces       Workspace[]
+  aiChatSessions   AIChatSession[]
+  workspaceMembers WorkspaceMember[]
+  activities       Activity[]
+  comments         Comment[]
+  notifications    Notification[]
 }
 
 model Workspace {
@@ -22,9 +27,31 @@ model Workspace {
   name      String
   ownerId   String
   owner     User      @relation(fields: [ownerId], references: [id])
-  projects  Project[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  projects     Project[]
+  members      WorkspaceMember[]
+  activities   Activity[]
+  notifications Notification[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+enum WorkspaceRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+model WorkspaceMember {
+  id          String        @id @default(uuid())
+  role        WorkspaceRole @default(VIEWER)
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([userId, workspaceId])
 }
 
 model Project {
@@ -54,4 +81,93 @@ model FileNode {
   project   Project      @relation(fields: [projectId], references: [id])
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
+
+  aiChatSessions AIChatSession[]
+  activities     Activity[]
+  commentThreads CommentThread[]
+}
+
+model AIChatSession {
+  id         String      @id @default(uuid())
+  userId     String
+  user       User        @relation(fields: [userId], references: [id])
+  documentId String
+  document   FileNode    @relation(fields: [documentId], references: [id])
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  messages   AIMessage[]
+
+  @@index([userId, documentId])
+}
+
+model AIMessage {
+  id        String        @id @default(uuid())
+  sessionId String
+  session   AIChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String        // "user" or "assistant"
+  content   String        @db.Text
+  createdAt DateTime      @default(now())
+}
+
+enum ActivityType {
+  FILE_CREATED
+  FILE_MODIFIED
+  FILE_DELETED
+  COMMENT_ADDED
+  MEMBER_JOINED
+}
+
+model Activity {
+  id          String       @id @default(uuid())
+  type        ActivityType
+  description String?      @db.Text
+  aiSummary   String?      @db.Text
+  workspaceId String
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileNodeId  String?
+  fileNode    FileNode?    @relation(fields: [fileNodeId], references: [id], onDelete: SetNull)
+  createdAt   DateTime     @default(now())
+}
+
+model CommentThread {
+  id          String     @id @default(uuid())
+  fileNodeId  String
+  fileNode    FileNode   @relation(fields: [fileNodeId], references: [id], onDelete: Cascade)
+  lineNumber  Int
+  resolved    Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  comments    Comment[]
+}
+
+model Comment {
+  id          String        @id @default(uuid())
+  threadId    String
+  thread      CommentThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content     String        @db.Text
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+enum NotificationType {
+  MENTION
+  REVIEW_REQUEST
+  CONFLICT_ALERT
+  AI_SUGGESTION
+}
+
+model Notification {
+  id          String           @id @default(uuid())
+  type        NotificationType
+  content     String           @db.Text
+  read        Boolean          @default(false)
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspaceId String?
+  workspace   Workspace?       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime         @default(now())
 }

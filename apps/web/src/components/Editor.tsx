@@ -4,6 +4,8 @@ import React, { useRef, useState, useEffect } from "react";
 import MonacoEditor, { useMonaco, OnMount } from "@monaco-editor/react";
 import { Socket } from "socket.io-client";
 import { ActiveUser, CursorPosition } from "../hooks/useDocumentSocket";
+import * as Y from 'yjs';
+import { MonacoBinding } from 'y-monaco';
 
 interface EditorProps {
   documentId: string;
@@ -12,24 +14,24 @@ interface EditorProps {
   onChange?: (value: string | undefined) => void;
   socket: Socket | null;
   isConnected: boolean;
+  isConnected: boolean;
   activeUsers: ActiveUser[];
-  saveDocument: (content: string) => void;
   teamViewEnabled: boolean;
+  editorRef: React.MutableRefObject<any>;
 }
 
 export function Editor({ 
   documentId, 
-  initialContent = "", 
   language = "typescript", 
   onChange,
   socket,
   isConnected,
   activeUsers,
-  saveDocument,
-  teamViewEnabled
+  teamViewEnabled,
+  editorRef: externalEditorRef
 }: EditorProps) {
-  const [content, setContent] = useState(initialContent);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [ydoc] = useState(() => new Y.Doc());
+  const bindingRef = useRef<any>(null);
   
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
@@ -82,12 +84,43 @@ export function Editor({
     currentSocketRef.current = socket;
   }, [socket]);
 
-  // Handle incoming cursor movements
+  // Yjs Synchronization
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleLocalUpdate = (update: Uint8Array, origin: any) => {
+      if (origin !== 'server') {
+        socket.emit('yjsUpdate', { documentId, update: Array.from(update) });
+      }
+    };
+    
+    ydoc.on('update', handleLocalUpdate);
+    
+    const handleYjsInit = (data: { documentId: string, update: number[] }) => {
+      if (data.documentId !== documentId) return;
+      Y.applyUpdate(ydoc, new Uint8Array(data.update), 'server');
+    };
+
+    const handleYjsUpdate = (data: { documentId: string, update: number[] }) => {
+      if (data.documentId !== documentId) return;
+      Y.applyUpdate(ydoc, new Uint8Array(data.update), 'server');
+    };
+
+    socket.on('yjsInit', handleYjsInit);
+    socket.on('yjsUpdate', handleYjsUpdate);
+
+    return () => {
+      ydoc.off('update', handleLocalUpdate);
+      socket.off('yjsInit', handleYjsInit);
+      socket.off('yjsUpdate', handleYjsUpdate);
+    };
+  }, [socket, documentId, ydoc]);
+
+  // Handle incoming custom remote cursor movements (Phase 3)
   useEffect(() => {
     if (!socket) return;
 
     const handleCursorMoved = (data: { userId: string, cursor: CursorPosition }) => {
-      console.log('Received cursorMoved:', data);
       remoteCursorsRef.current[data.userId] = data.cursor;
       updateDecorations();
     };
@@ -112,8 +145,6 @@ export function Editor({
     activeUsers.forEach(user => {
       const pos = remoteCursorsRef.current[user.userId];
       if (!pos) return;
-
-      console.log('Rendering decoration for user:', user.userId, 'at', pos);
 
       // Add selection highlight if there is a selection
       if (pos.selectionStartLineNumber && 
@@ -141,29 +172,38 @@ export function Editor({
       });
     });
 
-    console.log('Setting new decorations:', newDecorations);
+    // Mock Inline Comment Decoration for Code Reviews
+    newDecorations.push({
+      range: new monacoRef.current.Range(10, 1, 10, 1),
+      options: {
+        isWholeLine: true,
+        className: 'bg-yellow-500/20',
+        glyphMarginClassName: 'fas fa-comment text-yellow-500', // Assumes FontAwesome or similar
+        hoverMessage: { value: '**Daksh:** We need to refactor this logic.\n\n*Aryan:* Agreed, working on it! [Reply]*' }
+      }
+    });
+
     decorationsCollectionRef.current.set(newDecorations);
-  };
-
-  const handleEditorChange = (value: string | undefined) => {
-    setContent(value || "");
-    if (onChange) onChange(value);
-
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      saveDocument(value || "");
-    }, 1500); 
   };
 
   const handleEditorMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     monacoRef.current = monaco;
+    
+    // Attach editor instance to external ref so parent can query it for AI context
+    if (externalEditorRef) {
+      externalEditorRef.current = editor;
+    }
+
     decorationsCollectionRef.current = editor.createDecorationsCollection();
+
+    // Bind Yjs to Monaco
+    const ytext = ydoc.getText('monaco');
+    bindingRef.current = new MonacoBinding(ytext, editor.getModel()!, new Set([editor]), null);
 
     // Listen to local cursor changes to broadcast to others
     editor.onDidChangeCursorSelection((e) => {
       if (currentSocketRef.current && currentSocketRef.current.connected) {
-        console.log('Emitting cursorMove:', e.selection);
         currentSocketRef.current.emit('cursorMove', {
           documentId,
           cursor: {
@@ -183,6 +223,15 @@ export function Editor({
     updateDecorations();
   }, [teamViewEnabled]);
 
+  // Clean up binding on unmount
+  useEffect(() => {
+    return () => {
+      if (bindingRef.current) {
+        bindingRef.current.destroy();
+      }
+    };
+  }, []);
+
   return (
     <div className="w-full h-full min-h-[500px] border rounded-md overflow-hidden relative border-zinc-800">
       {!isConnected && (
@@ -194,14 +243,13 @@ export function Editor({
         height="100%"
         language={language}
         theme="vs-dark"
-        value={content}
-        onChange={handleEditorChange}
         onMount={handleEditorMount}
         options={{
           minimap: { enabled: false },
           fontSize: 14,
           wordWrap: "on",
           padding: { top: 16 },
+          glyphMargin: true,
         }}
       />
     </div>

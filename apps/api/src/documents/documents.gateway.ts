@@ -12,6 +12,7 @@ import { Logger, UseGuards } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { WsJwtGuard } from '../auth/ws-jwt.guard';
+import * as Y from 'yjs';
 
 interface CursorPosition {
   lineNumber: number;
@@ -46,11 +47,30 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   private readonly logger = new Logger(DocumentsGateway.name);
   private activeUsers = new Map<string, ActiveUser>();
+  private ydocs = new Map<string, Y.Doc>();
+  private saveInterval: NodeJS.Timeout;
 
   constructor(
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
-  ) {}
+  ) {
+    // Auto-save all dirty documents to database every 5 seconds
+    this.saveInterval = setInterval(() => this.saveAllDocuments(), 5000);
+  }
+
+  async saveAllDocuments() {
+    for (const [documentId, ydoc] of this.ydocs.entries()) {
+      const content = ydoc.getText('monaco').toString();
+      try {
+        await this.prisma.fileNode.update({
+          where: { id: documentId },
+          data: { content },
+        });
+      } catch (err) {
+        this.logger.error(`Failed to auto-save ${documentId}: ${err.message}`);
+      }
+    }
+  }
 
   async handleConnection(client: Socket) {
     try {
@@ -81,7 +101,7 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('joinDocument')
-  handleJoinDocument(
+  async handleJoinDocument(
     @MessageBody() data: { documentId: string },
     @ConnectedSocket() client: Socket,
   ) {
@@ -89,8 +109,6 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
     const userId = client.data.user.sub;
     const email = client.data.user.email;
     
-    // Pick a deterministic color based on userId length or hash, or just random
-    // We will use a random pleasant color
     const color = COLORS[Math.floor(Math.random() * COLORS.length)];
 
     this.activeUsers.set(client.id, {
@@ -103,6 +121,29 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
     });
 
     this.broadcastActiveUsers(data.documentId);
+
+    // Yjs Initialization
+    let ydoc = this.ydocs.get(data.documentId);
+    if (!ydoc) {
+      ydoc = new Y.Doc();
+      try {
+        const file = await this.prisma.fileNode.findUnique({ where: { id: data.documentId } });
+        if (file && file.content) {
+          ydoc.getText('monaco').insert(0, file.content);
+        }
+      } catch (e) {
+        this.logger.error(`Error loading document ${data.documentId} from DB: ${e.message}`);
+      }
+      // Re-check just in case another client created it while we were awaiting DB
+      if (!this.ydocs.has(data.documentId)) {
+        this.ydocs.set(data.documentId, ydoc);
+      } else {
+        ydoc = this.ydocs.get(data.documentId)!;
+      }
+    }
+
+    const stateVector = Y.encodeStateAsUpdate(ydoc);
+    client.emit('yjsInit', { documentId: data.documentId, update: Array.from(stateVector) });
   }
 
   @UseGuards(WsJwtGuard)
@@ -114,6 +155,25 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
     client.leave(data.documentId);
     this.activeUsers.delete(client.id);
     this.broadcastActiveUsers(data.documentId);
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage('yjsUpdate')
+  handleYjsUpdate(
+    @MessageBody() data: { documentId: string; update: number[] },
+    @ConnectedSocket() client: Socket,
+  ) {
+    const ydoc = this.ydocs.get(data.documentId);
+    if (ydoc) {
+      try {
+        const updateArray = new Uint8Array(data.update);
+        Y.applyUpdate(ydoc, updateArray);
+        // Broadcast to other clients in the room
+        client.to(data.documentId).emit('yjsUpdate', { documentId: data.documentId, update: data.update });
+      } catch (e) {
+        this.logger.error(`Failed to apply Yjs update: ${e.message}`);
+      }
+    }
   }
 
   @UseGuards(WsJwtGuard)
@@ -131,24 +191,6 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
         socketId: client.id,
         cursor: data.cursor,
       });
-    }
-  }
-
-  @UseGuards(WsJwtGuard)
-  @SubscribeMessage('saveDocument')
-  async handleSaveDocument(
-    @MessageBody() data: { documentId: string; content: string },
-    @ConnectedSocket() client: Socket,
-  ) {
-    try {
-      await this.prisma.fileNode.update({
-        where: { id: data.documentId },
-        data: { content: data.content },
-      });
-      return { event: 'saveSuccess', data: { documentId: data.documentId } };
-    } catch (error) {
-      this.logger.error(`Error saving document ${data.documentId}: ${error.message}`);
-      return { event: 'saveError', data: { message: 'Failed to save document' } };
     }
   }
 
