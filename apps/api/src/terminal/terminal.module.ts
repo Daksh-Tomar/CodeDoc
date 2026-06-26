@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
-import { TerminalService } from './terminal.service';
+import { ContainerManager } from './container.manager';
 import { TerminalGateway } from './terminal.gateway';
 import { PrismaModule } from '../prisma/prisma.module';
+import { WorkspaceModule } from '../workspace/workspace.module';
 
 @Module({
-  imports: [PrismaModule],
-  providers: [TerminalService, TerminalGateway],
-  exports: [TerminalService],
+  imports: [PrismaModule, WorkspaceModule],
+  providers: [ContainerManager, TerminalGateway],
+  exports: [ContainerManager],
 })
 export class TerminalModule {}

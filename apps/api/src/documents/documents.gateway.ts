@@ -13,7 +13,9 @@ import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { WsJwtGuard } from '../auth/ws-jwt.guard';
 import { AiService } from '../ai/ai.service';
+import { WorkspaceService } from '../workspace/workspace.service';
 import * as Y from 'yjs';
+import * as path from 'path';
 
 interface CursorPosition {
   lineNumber: number;
@@ -30,28 +32,7 @@ interface ActiveUser {
   cursor: CursorPosition | null;
   documentId: string | null;
   projectId?: string;
-}
-
-const COLORS = [
-  '#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', 
-  '#10b981', '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', 
-  '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#f43f5e'
-];
-
-interface CursorPosition {
-  lineNumber: number;
-  column: number;
-  selectionStartLineNumber?: number;
-  selectionStartColumn?: number;
-}
-
-interface ActiveUser {
-  socketId: string;
-  userId: string;
-  email: string;
-  color: string;
-  cursor: CursorPosition | null;
-  documentId: string;
+  workspaceId?: string;
 }
 
 const COLORS = [
@@ -71,35 +52,34 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   private readonly logger = new Logger(DocumentsGateway.name);
   private activeUsers = new Map<string, ActiveUser>();
-<<<<<<< HEAD
-=======
   private ydocs = new Map<string, Y.Doc>();
   private saveInterval: NodeJS.Timeout;
 
   private lastSummarizedContent = new Map<string, string>();
   private documentDebounceTimers = new Map<string, NodeJS.Timeout>();
   private lastEditorForDocument = new Map<string, string>();
->>>>>>> feature/phase-4-yjs
 
   constructor(
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
     private readonly aiService: AiService,
+    private readonly workspaceService: WorkspaceService,
   ) {
-    // Auto-save all dirty documents to database every 5 seconds
+    // Auto-save all dirty documents to filesystem every 5 seconds
     this.saveInterval = setInterval(() => this.saveAllDocuments(), 5000);
   }
 
   async saveAllDocuments() {
-    for (const [documentId, ydoc] of this.ydocs.entries()) {
+    for (const [docKey, ydoc] of this.ydocs.entries()) {
       const content = ydoc.getText('monaco').toString();
       try {
-        await this.prisma.fileNode.update({
-          where: { id: documentId },
-          data: { content },
-        });
+        const [workspaceId, ...pathParts] = docKey.split(':');
+        const filePath = pathParts.join(':');
+        if (!workspaceId || !filePath) continue;
+
+        await this.workspaceService.writeFile(workspaceId, filePath, content);
       } catch (err) {
-        this.logger.error(`Failed to auto-save ${documentId}: ${err.message}`);
+        this.logger.error(`Failed to auto-save ${docKey}: ${err.message}`);
       }
     }
   }
@@ -127,71 +107,12 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
     const user = this.activeUsers.get(client.id);
     if (user) {
       this.activeUsers.delete(client.id);
-<<<<<<< HEAD
-      this.broadcastActiveUsers(user.documentId);
-    }
-  }
-
-  @UseGuards(WsJwtGuard)
-  @SubscribeMessage('joinDocument')
-  handleJoinDocument(
-    @MessageBody() data: { documentId: string },
-    @ConnectedSocket() client: Socket,
-  ) {
-    client.join(data.documentId);
-    const userId = client.data.user.sub;
-    const email = client.data.user.email;
-    
-    // Pick a deterministic color based on userId length or hash, or just random
-    // We will use a random pleasant color
-    const color = COLORS[Math.floor(Math.random() * COLORS.length)];
-
-    this.activeUsers.set(client.id, {
-      socketId: client.id,
-      userId,
-      email,
-      color,
-      cursor: null,
-      documentId: data.documentId,
-    });
-
-    this.broadcastActiveUsers(data.documentId);
-  }
-
-  @UseGuards(WsJwtGuard)
-  @SubscribeMessage('leaveDocument')
-  handleLeaveDocument(
-    @MessageBody() data: { documentId: string },
-    @ConnectedSocket() client: Socket,
-  ) {
-    client.leave(data.documentId);
-    this.activeUsers.delete(client.id);
-    this.broadcastActiveUsers(data.documentId);
-  }
-
-  @UseGuards(WsJwtGuard)
-  @SubscribeMessage('cursorMove')
-  handleCursorMove(
-    @MessageBody() data: { documentId: string; cursor: CursorPosition },
-    @ConnectedSocket() client: Socket,
-  ) {
-    const user = this.activeUsers.get(client.id);
-    if (user) {
-      user.cursor = data.cursor;
-      // Broadcast cursor to everyone else in the document
-      client.to(data.documentId).emit('cursorMoved', {
-        userId: user.userId,
-        socketId: client.id,
-        cursor: data.cursor,
-      });
-=======
-      if (user.documentId) {
-        this.broadcastActiveUsers(user.documentId);
+      if (user.documentId && user.workspaceId) {
+        this.broadcastActiveUsers(`${user.workspaceId}:${user.documentId}`);
       }
       if (user.projectId) {
         this.broadcastProjectUsers(user.projectId);
       }
->>>>>>> feature/phase-4-yjs
     }
   }
 
@@ -201,20 +122,8 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
     @MessageBody() data: { projectId: string },
     @ConnectedSocket() client: Socket,
   ) {
-<<<<<<< HEAD
-    try {
-      await this.prisma.fileNode.update({
-        where: { id: data.documentId },
-        data: { content: data.content },
-      });
-      return { event: 'saveSuccess', data: { documentId: data.documentId } };
-    } catch (error) {
-      this.logger.error(`Error saving document ${data.documentId}: ${error.message}`);
-      return { event: 'saveError', data: { message: 'Failed to save document' } };
-=======
     client.join(`project:${data.projectId}`);
     
-    // Check if user exists (might have joined a document already)
     const existingUser = this.activeUsers.get(client.id);
     if (existingUser) {
       existingUser.projectId = data.projectId;
@@ -232,7 +141,6 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
         documentId: null,
         projectId: data.projectId,
       });
->>>>>>> feature/phase-4-yjs
     }
 
     this.broadcastProjectUsers(data.projectId);
@@ -248,8 +156,6 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
     const user = this.activeUsers.get(client.id);
     if (user) {
       user.projectId = undefined;
-      // We might want to remove them entirely if they also left all docs,
-      // but for simplicity, we'll keep the object if they are still connected
     }
     this.broadcastProjectUsers(data.projectId);
   }
@@ -257,14 +163,16 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('joinDocument')
   async handleJoinDocument(
-    @MessageBody() data: { documentId: string },
+    @MessageBody() data: { documentId: string; workspaceId: string },
     @ConnectedSocket() client: Socket,
   ) {
-    client.join(data.documentId);
+    const docKey = `${data.workspaceId}:${data.documentId}`;
+    client.join(docKey);
     const existingUser = this.activeUsers.get(client.id);
     
     if (existingUser) {
       existingUser.documentId = data.documentId;
+      existingUser.workspaceId = data.workspaceId;
     } else {
       const userId = client.data.user.sub;
       const email = client.data.user.email;
@@ -277,64 +185,64 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
         color,
         cursor: null,
         documentId: data.documentId,
+        workspaceId: data.workspaceId,
       });
     }
 
-    this.broadcastActiveUsers(data.documentId);
+    this.broadcastActiveUsers(docKey);
     const updatedUser = this.activeUsers.get(client.id);
     if (updatedUser?.projectId) {
       this.broadcastProjectUsers(updatedUser.projectId);
     }
 
     // Yjs Initialization
-    let ydoc = this.ydocs.get(data.documentId);
+    let ydoc = this.ydocs.get(docKey);
     if (!ydoc) {
       ydoc = new Y.Doc();
       try {
-        const file = await this.prisma.fileNode.findUnique({ where: { id: data.documentId } });
-        if (file && file.content) {
-          ydoc.getText('monaco').insert(0, file.content);
-        }
+        const content = await this.workspaceService.readFile(data.workspaceId, data.documentId);
+        ydoc.getText('monaco').insert(0, content);
       } catch (e) {
-        this.logger.error(`Error loading document ${data.documentId} from DB: ${e.message}`);
+        this.logger.warn(`Error loading document ${docKey} from FS: ${e.message}`);
       }
-      // Re-check just in case another client created it while we were awaiting DB
-      if (!this.ydocs.has(data.documentId)) {
-        this.ydocs.set(data.documentId, ydoc);
-        this.lastSummarizedContent.set(data.documentId, ydoc.getText('monaco').toString());
+      if (!this.ydocs.has(docKey)) {
+        this.ydocs.set(docKey, ydoc);
+        this.lastSummarizedContent.set(docKey, ydoc.getText('monaco').toString());
       } else {
-        ydoc = this.ydocs.get(data.documentId)!;
+        ydoc = this.ydocs.get(docKey)!;
       }
     }
 
     const stateVector = Y.encodeStateAsUpdate(ydoc);
-    client.emit('yjsInit', { documentId: data.documentId, update: Array.from(stateVector) });
+    client.emit('yjsInit', { documentId: docKey, update: Array.from(stateVector) });
   }
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('requestYjsInit')
   handleRequestYjsInit(
-    @MessageBody() data: { documentId: string },
+    @MessageBody() data: { documentId: string; workspaceId: string },
     @ConnectedSocket() client: Socket,
   ) {
-    const ydoc = this.ydocs.get(data.documentId);
+    const docKey = `${data.workspaceId}:${data.documentId}`;
+    const ydoc = this.ydocs.get(docKey);
     if (ydoc) {
       const stateVector = Y.encodeStateAsUpdate(ydoc);
-      client.emit('yjsInit', { documentId: data.documentId, update: Array.from(stateVector) });
+      client.emit('yjsInit', { documentId: docKey, update: Array.from(stateVector) });
     }
   }
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('leaveDocument')
   handleLeaveDocument(
-    @MessageBody() data: { documentId: string },
+    @MessageBody() data: { documentId: string; workspaceId: string },
     @ConnectedSocket() client: Socket,
   ) {
-    client.leave(data.documentId);
+    const docKey = `${data.workspaceId}:${data.documentId}`;
+    client.leave(docKey);
     const user = this.activeUsers.get(client.id);
     if (user) {
       user.documentId = null;
-      this.broadcastActiveUsers(data.documentId);
+      this.broadcastActiveUsers(docKey);
       if (user.projectId) {
         this.broadcastProjectUsers(user.projectId);
       }
@@ -344,10 +252,11 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('yjsUpdate')
   handleYjsUpdate(
-    @MessageBody() data: { documentId: string; update: number[] },
+    @MessageBody() data: { documentId: string; workspaceId: string; update: number[] },
     @ConnectedSocket() client: Socket,
   ) {
-    const ydoc = this.ydocs.get(data.documentId);
+    const docKey = `${data.workspaceId}:${data.documentId}`;
+    const ydoc = this.ydocs.get(docKey);
     const user = this.activeUsers.get(client.id);
 
     if (ydoc) {
@@ -355,10 +264,10 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
         const updateArray = new Uint8Array(data.update);
         Y.applyUpdate(ydoc, updateArray);
         // Broadcast to other clients in the room
-        client.to(data.documentId).emit('yjsUpdate', { documentId: data.documentId, update: data.update });
+        client.to(docKey).emit('yjsUpdate', { documentId: docKey, update: data.update });
 
         if (user) {
-          this.triggerDebouncedSummary(data.documentId, user.userId, user.projectId);
+          this.triggerDebouncedSummary(docKey, user.userId, user.projectId);
         }
       } catch (e) {
         this.logger.error(`Failed to apply Yjs update: ${e.message}`);
@@ -366,48 +275,38 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
     }
   }
 
-  private triggerDebouncedSummary(documentId: string, userId: string, projectId?: string) {
-    this.lastEditorForDocument.set(documentId, userId);
+  private triggerDebouncedSummary(docKey: string, userId: string, projectId?: string) {
+    this.lastEditorForDocument.set(docKey, userId);
 
-    if (this.documentDebounceTimers.has(documentId)) {
-      clearTimeout(this.documentDebounceTimers.get(documentId)!);
+    if (this.documentDebounceTimers.has(docKey)) {
+      clearTimeout(this.documentDebounceTimers.get(docKey)!);
     }
 
     const timer = setTimeout(() => {
-      this.generateAndBroadcastSummary(documentId, projectId);
+      this.generateAndBroadcastSummary(docKey, projectId);
     }, 10000); // 10 seconds debounce
 
-    this.documentDebounceTimers.set(documentId, timer);
+    this.documentDebounceTimers.set(docKey, timer);
   }
 
-  private async generateAndBroadcastSummary(documentId: string, projectId?: string) {
-    this.documentDebounceTimers.delete(documentId);
+  private async generateAndBroadcastSummary(docKey: string, projectId?: string) {
+    this.documentDebounceTimers.delete(docKey);
     
-    const ydoc = this.ydocs.get(documentId);
+    const ydoc = this.ydocs.get(docKey);
     if (!ydoc) return;
 
     const currentContent = ydoc.getText('monaco').toString();
-    const oldContent = this.lastSummarizedContent.get(documentId) || '';
+    const oldContent = this.lastSummarizedContent.get(docKey) || '';
 
     if (currentContent === oldContent) return;
 
-    this.lastSummarizedContent.set(documentId, currentContent);
-    const userId = this.lastEditorForDocument.get(documentId);
+    this.lastSummarizedContent.set(docKey, currentContent);
+    const userId = this.lastEditorForDocument.get(docKey);
     if (!userId) return;
 
     try {
-      const fileNode = await this.prisma.fileNode.findUnique({
-        where: { id: documentId },
-        select: { name: true, projectId: true, project: { select: { workspaceId: true } } }
-      });
-
-      const actualProjectId = projectId || fileNode?.projectId;
-      const workspaceId = fileNode?.project?.workspaceId;
-      
-      if (!workspaceId) {
-        this.logger.warn(`Cannot create activity: No workspaceId found for document ${documentId}`);
-        return;
-      }
+      const [workspaceId, ...pathParts] = docKey.split(':');
+      const filePath = pathParts.join(':');
 
       // Quick diff/summary request
       const promptContext = `Old Content:\n${oldContent.substring(0, 1000)}\n\nNew Content:\n${currentContent.substring(0, 1000)}\n\nDescribe the main change made in one brief sentence.`;
@@ -417,36 +316,35 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
       const activity = await this.prisma.activity.create({
         data: {
           type: 'FILE_MODIFIED',
-          description: `Updated ${fileNode?.name || 'file'}`,
+          description: `Updated ${path.basename(filePath)}`,
           aiSummary,
           workspaceId: workspaceId,
           userId: userId,
-          fileNodeId: documentId,
+          filePath: filePath,
         },
         include: {
           user: { select: { name: true, email: true } },
-          fileNode: { select: { name: true } }
         }
       });
 
       // Broadcast to all connected clients since we use a unified workspace
       this.server.emit('newActivity', activity);
     } catch (e) {
-      this.logger.error(`Error generating AI summary for ${documentId}: ${e.message}`);
+      this.logger.error(`Error generating AI summary for ${docKey}: ${e.message}`);
     }
   }
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage('cursorMove')
   handleCursorMove(
-    @MessageBody() data: { documentId: string; cursor: CursorPosition },
+    @MessageBody() data: { documentId: string; workspaceId: string; cursor: CursorPosition },
     @ConnectedSocket() client: Socket,
   ) {
+    const docKey = `${data.workspaceId}:${data.documentId}`;
     const user = this.activeUsers.get(client.id);
     if (user) {
       user.cursor = data.cursor;
-      // Broadcast cursor to everyone else in the document
-      client.to(data.documentId).emit('cursorMoved', {
+      client.to(docKey).emit('cursorMoved', {
         userId: user.userId,
         socketId: client.id,
         cursor: data.cursor,
@@ -454,11 +352,11 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
     }
   }
 
-  private broadcastActiveUsers(documentId: string) {
+  private broadcastActiveUsers(docKey: string) {
     const usersInDoc = Array.from(this.activeUsers.values()).filter(
-      (u) => u.documentId === documentId
+      (u) => `${u.workspaceId}:${u.documentId}` === docKey
     );
-    this.server.to(documentId).emit('activeUsers', usersInDoc);
+    this.server.to(docKey).emit('activeUsers', usersInDoc);
   }
 
   private broadcastProjectUsers(projectId: string) {
@@ -466,13 +364,6 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
       (u) => u.projectId === projectId
     );
     this.server.to(`project:${projectId}`).emit('projectUsers', usersInProject);
-  }
-
-  private broadcastActiveUsers(documentId: string) {
-    const usersInDoc = Array.from(this.activeUsers.values()).filter(
-      (u) => u.documentId === documentId
-    );
-    this.server.to(documentId).emit('activeUsers', usersInDoc);
   }
 
   private extractTokenFromSocket(client: Socket): string | undefined {

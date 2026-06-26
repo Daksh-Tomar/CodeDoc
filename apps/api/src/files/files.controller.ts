@@ -1,9 +1,13 @@
-import { Controller, Get, Post, Body, Param, Delete } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, NotFoundException } from '@nestjs/common';
 import { FilesService } from './files.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('projects/:projectId/files')
 export class FilesController {
-  constructor(private readonly filesService: FilesService) {}
+  constructor(
+    private readonly filesService: FilesService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   @Get()
   getProjectFiles(@Param('projectId') projectId: string) {
@@ -11,10 +15,12 @@ export class FilesController {
   }
 
   @Get(':fileId')
-  getFile(@Param('projectId') projectId: string, @Param('fileId') fileId: string) {
-    // projectId is in the path, but we can also just fetch by fileId.
-    // Wait, the path is /projects/:projectId/files. So this is /projects/:projectId/files/:fileId
-    return this.filesService.getFile(fileId);
+  async getFile(@Param('projectId') projectId: string, @Param('fileId') fileId: string) {
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) throw new NotFoundException('Project not found');
+
+    const decodedFilePath = decodeURIComponent(fileId);
+    return this.filesService.getFile(project.workspaceId, decodedFilePath);
   }
 
   @Post()

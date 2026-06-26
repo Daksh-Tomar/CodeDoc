@@ -1,17 +1,6 @@
 "use client";
 
-<<<<<<< HEAD
-import { useState } from "react";
-import { Editor } from "@/components/Editor";
-import { useDocumentSocket } from "@/hooks/useDocumentSocket";
-
-export default function Home() {
-  const documentId = "a0ddcbc3-9105-47ec-bae2-beaf0f4547ce";
-  const [teamViewEnabled, setTeamViewEnabled] = useState(true);
-  
-  const { socket, isConnected, activeUsers, saveDocument } = useDocumentSocket({ documentId });
-=======
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import dynamic from 'next/dynamic';
 import { AiChatSidebar } from '@/components/AiChatSidebar';
 import { ActivityFeed } from '@/components/ActivityFeed';
@@ -24,11 +13,11 @@ const TerminalPanel = dynamic(() => import('@/components/TerminalPanel').then(mo
 });
 import { useDocumentSocket, defaultToken } from "@/hooks/useDocumentSocket";
 import { FileTree } from "@/components/FileTree";
-import { useEffect } from "react";
 
 export default function Home() {
   const projectId = "2d7681d3-160b-4580-9d98-bb964cb63c3d";
-  const [activeDocumentId, setActiveDocumentId] = useState<string | null>("a0ddcbc3-9105-47ec-bae2-beaf0f4547ce");
+  const workspaceId = "default-workspace";
+  const [activeDocumentId, setActiveDocumentId] = useState<string | null>(null);
   const [activeFileName, setActiveFileName] = useState("main.ts");
   const [teamViewEnabled, setTeamViewEnabled] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -37,13 +26,13 @@ export default function Home() {
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const editorRef = useRef<any>(null);
   
-  const { socket, isConnected, activeUsers, projectUsers } = useDocumentSocket({ projectId, documentId: activeDocumentId });
+  const { socket, isConnected, activeUsers, projectUsers } = useDocumentSocket({ projectId, workspaceId, documentId: activeDocumentId });
 
   // Fetch the active file name whenever activeDocumentId changes
   useEffect(() => {
     if (!activeDocumentId) return;
     const token = typeof window !== 'undefined' ? localStorage.getItem('test_jwt_token') || defaultToken : defaultToken;
-    fetch(`http://localhost:3001/projects/${projectId}/files/${activeDocumentId}`, {
+    fetch(`http://localhost:3001/projects/${projectId}/files/${encodeURIComponent(activeDocumentId)}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
     .then(res => res.json())
@@ -77,7 +66,6 @@ export default function Home() {
       selectionText
     };
   };
->>>>>>> feature/phase-4-yjs
 
   return (
     <div className="flex h-screen w-full bg-zinc-950 text-zinc-50 overflow-hidden">
@@ -87,22 +75,12 @@ export default function Home() {
           <h1 className="font-bold text-lg tracking-tight">CodeDoc</h1>
         </div>
         <div className="flex-1 p-2 overflow-y-auto">
-<<<<<<< HEAD
-          <div className="text-sm font-medium text-zinc-400 mb-2 px-2 uppercase tracking-wider">Explorer</div>
-          <div className="space-y-1">
-            <div className="px-2 py-1 hover:bg-zinc-800 rounded cursor-pointer text-sm flex items-center gap-2 text-blue-400 bg-zinc-800/50">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-              main.ts
-            </div>
-          </div>
-=======
           <FileTree 
             projectId={projectId} 
             projectUsers={projectUsers} 
             activeDocumentId={activeDocumentId}
             onFileSelect={(fileId) => setActiveDocumentId(fileId)}
           />
->>>>>>> feature/phase-4-yjs
         </div>
       </aside>
 
@@ -112,11 +90,7 @@ export default function Home() {
         <div className="h-14 border-b border-zinc-800 bg-zinc-950 flex items-center px-6 justify-between">
           <div className="flex items-center gap-4">
             <div className="flex -space-x-2">
-<<<<<<< HEAD
-              {activeUsers.map(user => (
-=======
               {projectUsers.map(user => (
->>>>>>> feature/phase-4-yjs
                 <div 
                   key={user.socketId}
                   className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 border-zinc-950 text-white"
@@ -127,51 +101,13 @@ export default function Home() {
                 </div>
               ))}
             </div>
-<<<<<<< HEAD
-            {activeUsers.length > 0 && (
-              <span className="text-sm text-zinc-400">
-                {activeUsers.length} user{activeUsers.length !== 1 ? 's' : ''} online
-=======
             {projectUsers.length > 0 && (
               <span className="text-sm text-zinc-400">
                 {projectUsers.length} user{projectUsers.length !== 1 ? 's' : ''} online
->>>>>>> feature/phase-4-yjs
               </span>
             )}
           </div>
           
-<<<<<<< HEAD
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-zinc-400">Team View</span>
-            <button 
-              onClick={() => setTeamViewEnabled(!teamViewEnabled)}
-              className={`w-11 h-6 rounded-full transition-colors relative flex items-center px-1 ${teamViewEnabled ? 'bg-blue-500' : 'bg-zinc-700'}`}
-            >
-              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${teamViewEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
-            </button>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="h-10 border-b border-zinc-800 bg-zinc-900 flex items-center px-4 gap-2">
-          <div className="px-4 py-1.5 bg-zinc-800 text-sm rounded-t-md border-t border-blue-500 text-zinc-200">
-            main.ts
-          </div>
-        </div>
-        
-        {/* Editor Wrapper */}
-        <div className="flex-1 p-4 bg-zinc-950">
-          <Editor 
-            documentId={documentId} 
-            initialContent="// Welcome to CodeDoc Workspace" 
-            language="typescript" 
-            socket={socket}
-            isConnected={isConnected}
-            activeUsers={activeUsers}
-            saveDocument={saveDocument}
-            teamViewEnabled={teamViewEnabled}
-          />
-=======
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 mr-4 border-r border-zinc-800 pr-4">
               <span className="text-sm text-zinc-400">Team View</span>
@@ -246,7 +182,7 @@ export default function Home() {
                 <Editor 
                   key={activeDocumentId}
                   documentId={activeDocumentId} 
-                  initialContent="// Select a file or start typing" 
+                  workspaceId={workspaceId}
                   language={activeFileName.endsWith('.ts') || activeFileName.endsWith('.tsx') ? 'typescript' : 'javascript'} 
                   socket={socket}
                   isConnected={isConnected}
@@ -277,10 +213,9 @@ export default function Home() {
           
           {isTerminalOpen && (
             <div className="h-64 shrink-0 flex mt-4 border-t border-zinc-800">
-              <TerminalPanel workspaceId="default-workspace" />
+              <TerminalPanel workspaceId={workspaceId} />
             </div>
           )}
->>>>>>> feature/phase-4-yjs
         </div>
       </main>
     </div>

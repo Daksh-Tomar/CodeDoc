@@ -8,9 +8,11 @@ import { AiModule } from './ai/ai.module';
 import { TerminalModule } from './terminal/terminal.module';
 import { CollaborationModule } from './collaboration/collaboration.module';
 import { FilesModule } from './files/files.module';
+import { WorkspaceModule } from './workspace/workspace.module';
+import { ProxyModule } from './proxy/proxy.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, DocumentsModule, AiModule, TerminalModule, CollaborationModule, FilesModule],
+  imports: [PrismaModule, AuthModule, DocumentsModule, AiModule, TerminalModule, CollaborationModule, FilesModule, WorkspaceModule, ProxyModule],
   controllers: [AppController],
   providers: [AppService],
 })

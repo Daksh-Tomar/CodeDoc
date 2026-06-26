@@ -8,7 +8,7 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { TerminalService } from './terminal.service';
+import { ContainerManager } from './container.manager';
 import { PrismaService } from '../prisma/prisma.service';
 
 @WebSocketGateway({ namespace: '/terminal', cors: { origin: '*' } })
@@ -19,7 +19,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
   private activeStreams = new Map<string, any>();
 
   constructor(
-    private terminalService: TerminalService,
+    private containerManager: ContainerManager,
     private prisma: PrismaService,
   ) { }
 
@@ -63,7 +63,7 @@ export class TerminalGateway implements OnGatewayConnection, OnGatewayDisconnect
         this.server.to(workspaceId).emit('output', str);
       };
 
-      const stream = await this.terminalService.getContainerStream(workspaceId, onData);
+      const stream = await this.containerManager.getContainerStream(workspaceId, onData);
       this.activeStreams.set(workspaceId, stream);
     }
 

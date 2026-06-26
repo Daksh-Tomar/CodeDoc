@@ -59,45 +59,26 @@ model Project {
   name        String
   workspaceId String
   workspace   Workspace  @relation(fields: [workspaceId], references: [id])
-  files       FileNode[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
-}
-
-enum FileNodeType {
-  FILE
-  FOLDER
-}
-
-model FileNode {
-  id        String       @id @default(uuid())
-  name      String
-  type      FileNodeType
-  content   String?      @db.Text
-  parentId  String?
-  parent    FileNode?    @relation("FileHierarchy", fields: [parentId], references: [id])
-  children  FileNode[]   @relation("FileHierarchy")
-  projectId String
-  project   Project      @relation(fields: [projectId], references: [id])
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-
   aiChatSessions AIChatSession[]
-  activities     Activity[]
   commentThreads CommentThread[]
 }
+
+
 
 model AIChatSession {
   id         String      @id @default(uuid())
   userId     String
   user       User        @relation(fields: [userId], references: [id])
-  documentId String
-  document   FileNode    @relation(fields: [documentId], references: [id])
+  filePath   String
+  projectId  String
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   messages   AIMessage[]
 
-  @@index([userId, documentId])
+  @@index([userId, filePath])
 }
 
 model AIMessage {
@@ -126,15 +107,15 @@ model Activity {
   workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   userId      String
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  fileNodeId  String?
-  fileNode    FileNode?    @relation(fields: [fileNodeId], references: [id], onDelete: SetNull)
+  filePath    String?
   createdAt   DateTime     @default(now())
 }
 
 model CommentThread {
   id          String     @id @default(uuid())
-  fileNodeId  String
-  fileNode    FileNode   @relation(fields: [fileNodeId], references: [id], onDelete: Cascade)
+  filePath    String
+  projectId   String
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   lineNumber  Int
   resolved    Boolean    @default(false)
   createdAt   DateTime   @default(now())
