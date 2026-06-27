@@ -20,7 +20,7 @@ export class CommentService {
           }
         }
       },
-      include: { comments: { include: { user: { select: { name: true } } } } }
+      include: { comments: { include: { user: { select: { displayName: true } } } } }
     });
     this.logger.log(`Thread created on file ${filePath} line ${lineNumber}`);
     return thread;
@@ -33,7 +33,7 @@ export class CommentService {
         userId,
         content
       },
-      include: { user: { select: { name: true } } }
+      include: { user: { select: { displayName: true } } }
     });
   }
 
@@ -49,7 +49,7 @@ export class CommentService {
       where: { filePath },
       include: {
         comments: {
-          include: { user: { select: { name: true, email: true } } },
+          include: { user: { select: { displayName: true, email: true } } },
           orderBy: { createdAt: 'asc' }
         }
       },

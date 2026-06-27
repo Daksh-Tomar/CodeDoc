@@ -39,7 +39,7 @@ export class ActivityService {
         aiSummary
       },
       include: {
-        user: { select: { id: true, name: true, email: true } }
+        user: { select: { id: true, displayName: true, email: true } }
       }
     });
 
@@ -52,7 +52,7 @@ export class ActivityService {
       where: { workspaceId },
       orderBy: { createdAt: 'desc' },
       include: {
-        user: { select: { id: true, name: true, email: true } }
+        user: { select: { id: true, displayName: true, email: true } }
       }
     });
   }

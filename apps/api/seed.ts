@@ -20,7 +20,7 @@ async function main() {
     data: {
       email: 'test@example.com',
       password: 'password123',
-      name: 'Test User',
+      displayName: 'Test User',
     }
   });
 
@@ -28,6 +28,12 @@ async function main() {
     data: {
       name: 'Test Workspace',
       ownerId: user.id,
+      members: {
+        create: {
+          userId: user.id,
+          role: 'OWNER',
+        }
+      }
     }
   });
 
@@ -44,7 +50,7 @@ async function main() {
     data: {
       email: 'test2@example.com',
       password: 'password123',
-      name: 'Test User 2',
+      displayName: 'Test User 2',
     }
   });
 

@@ -66,7 +66,7 @@ export class FilesService implements OnModuleInit, OnModuleDestroy {
     try {
       await fs.access(workspacePath);
     } catch {
-      await this.workspaceService.createWorkspace(workspaceId);
+      await this.workspaceService.createWorkspaceDir(workspaceId);
     }
 
     const files: FileNodeDTO[] = [];

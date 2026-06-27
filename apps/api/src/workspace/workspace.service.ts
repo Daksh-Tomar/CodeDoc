@@ -1,8 +1,10 @@
-import { Injectable, Logger, NotFoundException, BadRequestException, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, OnModuleDestroy, UnauthorizedException } from '@nestjs/common';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as chokidar from 'chokidar';
 import { EventEmitter } from 'events';
+import { PrismaService } from '../prisma/prisma.service';
+import { WorkspaceRole, RoleRequestStatus } from '@prisma/client';
 
 @Injectable()
 export class WorkspaceService extends EventEmitter implements OnModuleDestroy {
@@ -10,7 +12,7 @@ export class WorkspaceService extends EventEmitter implements OnModuleDestroy {
   private readonly workspacesRoot = path.join('c:', 'Users', 'todak', 'Desktop', 'CodeDoc', 'workspaces');
   private watchers = new Map<string, chokidar.FSWatcher>();
 
-  constructor() {
+  constructor(private readonly prisma: PrismaService) {
     super();
     this.ensureWorkspacesRoot();
   }
@@ -48,7 +50,60 @@ export class WorkspaceService extends EventEmitter implements OnModuleDestroy {
     return absolutePath;
   }
 
-  async createWorkspace(workspaceId: string): Promise<void> {
+  async getUserWorkspaces(userId: string) {
+    return this.prisma.workspace.findMany({
+      where: {
+        members: {
+          some: { userId },
+        },
+      },
+      include: {
+        owner: true,
+        _count: {
+          select: { members: true },
+        },
+      },
+    });
+  }
+
+  async createWorkspace(ownerId: string, name: string) {
+    const workspace = await this.prisma.workspace.create({
+      data: {
+        name,
+        ownerId,
+        members: {
+          create: {
+            userId: ownerId,
+            role: WorkspaceRole.OWNER,
+          },
+        },
+        projects: {
+          create: {
+            name: 'Default Project',
+          },
+        },
+      },
+    });
+
+    await this.createWorkspaceDir(workspace.id);
+    return workspace;
+  }
+
+  async getWorkspaceDetails(workspaceId: string) {
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      include: {
+        members: {
+          include: { user: true },
+        },
+        projects: true,
+      },
+    });
+    if (!workspace) throw new NotFoundException('Workspace not found');
+    return workspace;
+  }
+
+  async createWorkspaceDir(workspaceId: string): Promise<void> {
     const workspacePath = this.getWorkspacePath(workspaceId);
     try {
       await fs.mkdir(workspacePath, { recursive: true });
@@ -100,11 +155,94 @@ export class WorkspaceService extends EventEmitter implements OnModuleDestroy {
         this.watchers.delete(workspaceId);
       }
       await fs.rm(workspacePath, { recursive: true, force: true });
-      this.logger.log(`Deleted workspace directory for ${workspaceId}`);
+      await this.prisma.workspace.delete({ where: { id: workspaceId } });
+      this.logger.log(`Deleted workspace directory and DB record for ${workspaceId}`);
     } catch (error) {
       this.logger.error(`Failed to delete workspace ${workspaceId}`, error);
       throw error;
     }
+  }
+
+  async inviteUser(workspaceId: string, email: string, role: WorkspaceRole) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) throw new NotFoundException('User not found');
+
+    return this.prisma.workspaceMember.create({
+      data: {
+        workspaceId,
+        userId: user.id,
+        role,
+      },
+    });
+  }
+
+  async createRoleRequest(workspaceId: string, userId: string, requestedRole: WorkspaceRole) {
+    return this.prisma.roleRequest.create({
+      data: {
+        workspaceId,
+        requesterId: userId,
+        requestedRole,
+      },
+    });
+  }
+
+  async getRoleRequests(workspaceId: string) {
+    return this.prisma.roleRequest.findMany({
+      where: { workspaceId, status: RoleRequestStatus.PENDING },
+      include: { requester: true },
+    });
+  }
+
+  async reviewRoleRequest(requestId: string, reviewerId: string, approve: boolean) {
+    const request = await this.prisma.roleRequest.findUnique({ where: { id: requestId } });
+    if (!request) throw new NotFoundException('Role request not found');
+
+    const status = approve ? RoleRequestStatus.APPROVED : RoleRequestStatus.REJECTED;
+
+    await this.prisma.roleRequest.update({
+      where: { id: requestId },
+      data: {
+        status,
+        reviewedById: reviewerId,
+        reviewedAt: new Date(),
+      },
+    });
+
+    if (approve) {
+      await this.prisma.workspaceMember.update({
+        where: {
+          userId_workspaceId: {
+            userId: request.requesterId,
+            workspaceId: request.workspaceId,
+          },
+        },
+        data: { role: request.requestedRole },
+      });
+    }
+    return { success: true, status };
+  }
+
+  async updateMemberRole(workspaceId: string, memberId: string, role: WorkspaceRole) {
+    return this.prisma.workspaceMember.update({
+      where: {
+        userId_workspaceId: {
+          userId: memberId,
+          workspaceId,
+        },
+      },
+      data: { role },
+    });
+  }
+
+  async removeMember(workspaceId: string, memberId: string) {
+    return this.prisma.workspaceMember.delete({
+      where: {
+        userId_workspaceId: {
+          userId: memberId,
+          workspaceId,
+        },
+      },
+    });
   }
 
   async readFile(workspaceId: string, filePath: string): Promise<string> {

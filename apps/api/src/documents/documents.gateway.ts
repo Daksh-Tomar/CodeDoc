@@ -28,6 +28,7 @@ interface ActiveUser {
   socketId: string;
   userId: string;
   email: string;
+  displayName?: string;
   color: string;
   cursor: CursorPosition | null;
   documentId: string | null;
@@ -147,12 +148,14 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
     } else {
       const userId = client.data.user.sub;
       const email = client.data.user.email;
+      const displayName = client.data.user.displayName;
       const color = COLORS[Math.floor(Math.random() * COLORS.length)];
 
       this.activeUsers.set(client.id, {
         socketId: client.id,
         userId,
         email,
+        displayName,
         color,
         cursor: null,
         documentId: null,
@@ -193,12 +196,14 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
     } else {
       const userId = client.data.user.sub;
       const email = client.data.user.email;
+      const displayName = client.data.user.displayName;
       const color = COLORS[Math.floor(Math.random() * COLORS.length)];
 
       this.activeUsers.set(client.id, {
         socketId: client.id,
         userId,
         email,
+        displayName,
         color,
         cursor: null,
         documentId: data.documentId,
@@ -340,7 +345,7 @@ export class DocumentsGateway implements OnGatewayConnection, OnGatewayDisconnec
           filePath: filePath,
         },
         include: {
-          user: { select: { name: true, email: true } },
+          user: { select: { displayName: true, email: true } },
         }
       });
 

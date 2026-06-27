@@ -8,7 +8,7 @@ type Activity = {
   description: string;
   aiSummary: string | null;
   createdAt: string;
-  user: { name: string; email: string };
+  user: { displayName: string; email: string };
   fileNode?: { name: string };
 };
 
@@ -50,7 +50,7 @@ export function ActivityFeed({ projectId, socket }: { projectId: string, socket:
         {activities.map((act) => (
           <div key={act.id} className="text-sm">
             <div className="flex items-center space-x-2 text-gray-300">
-              <span className="font-medium text-blue-400">{act.user.name}</span>
+              <span className="font-medium text-blue-400">{act.user.displayName || act.user.email}</span>
               <span className="text-gray-500 text-xs">
                 {new Date(act.createdAt).toLocaleTimeString()}
               </span>

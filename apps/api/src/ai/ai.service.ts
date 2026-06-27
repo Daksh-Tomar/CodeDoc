@@ -92,7 +92,7 @@ If the user asks a general question, answer normally. If they ask about the code
 
     try {
       const responseStream = await this.ai.models.generateContentStream({
-        model: 'gemini-2.5-flash', // Default standard model
+        model: 'gemini-flash-lite-latest', // Using lite model for higher quota limits
         contents,
         config: {
           systemInstruction: {
@@ -136,7 +136,7 @@ If the user asks a general question, answer normally. If they ask about the code
   async generateSummary(diffText: string): Promise<string> {
     try {
       const response = await this.ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-flash-lite-latest',
         contents: [
           { role: 'user', parts: [{ text: `Summarize this file modification concisely in 1 sentence:\n\n${diffText}` }] }
         ]

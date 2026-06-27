@@ -25,7 +25,7 @@ export function FileTree({ projectId, projectUsers, activeDocumentId, onFileSele
 
   const fetchFiles = async () => {
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('test_jwt_token') || defaultToken : defaultToken;
+      const token = typeof window !== 'undefined' ? localStorage.getItem('codedoc_token') || defaultToken : defaultToken;
       const res = await fetch(`http://localhost:3001/projects/${projectId}/files`, {
         headers: {
           Authorization: `Bearer ${token}`
@@ -73,7 +73,7 @@ export function FileTree({ projectId, projectUsers, activeDocumentId, onFileSele
     const name = prompt(`Enter ${type.toLowerCase()} name:`);
     if (!name) return;
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('test_jwt_token') || defaultToken : defaultToken;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('codedoc_token') || defaultToken : defaultToken;
     try {
       const res = await fetch(`http://localhost:3001/projects/${projectId}/files`, {
         method: 'POST',
@@ -116,7 +116,7 @@ export function FileTree({ projectId, projectUsers, activeDocumentId, onFileSele
           if (usersInFile.length > 0) {
             const firstColor = usersInFile[0].color;
             borderStyle = { borderLeft: `2px solid ${firstColor}` };
-            tooltip = `${usersInFile.map(u => u.email).join(', ')} ${usersInFile.length > 1 ? 'are' : 'is'} working on ${node.name}`;
+            tooltip = `${usersInFile.map(u => u.displayName || u.email.split('@')[0]).join(', ')} ${usersInFile.length > 1 ? 'are' : 'is'} working on ${node.name}`;
           }
 
           return (

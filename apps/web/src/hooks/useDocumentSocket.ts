@@ -12,6 +12,7 @@ export interface ActiveUser {
   socketId: string;
   userId: string;
   email: string;
+  displayName?: string;
   color: string;
   cursor: CursorPosition | null;
   documentId: string | null;
@@ -38,7 +39,7 @@ export function useDocumentSocket({ projectId, workspaceId, documentId, url = 'h
   const currentDocIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('test_jwt_token') || defaultToken : defaultToken;
+    const token = typeof window !== 'undefined' ? localStorage.getItem('codedoc_token') : null;
 
     const socket = io(url, {
       auth: {

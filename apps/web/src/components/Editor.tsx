@@ -57,7 +57,7 @@ export function Editor({
           z-index: 9;
         }
         .remote-cursor-${user.socketId}::after {
-          content: '${user.email.split('@')[0]}';
+          content: '${(user.displayName || user.email.split('@')[0]).replace(/'/g, "\\'")}';
           position: absolute;
           top: -18px;
           left: -2px;

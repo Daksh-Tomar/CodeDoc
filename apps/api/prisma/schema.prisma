@@ -7,11 +7,12 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String?
-  password  String
-  createdAt DateTime @default(now())
+  id          String   @id @default(uuid())
+  email       String   @unique
+  displayName String?
+  avatarUrl   String?
+  password    String
+  createdAt   DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   workspaces       Workspace[]
@@ -20,6 +21,7 @@ model User {
   activities       Activity[]
   comments         Comment[]
   notifications    Notification[]
+  roleRequests     RoleRequest[]
 }
 
 model Workspace {
@@ -33,10 +35,12 @@ model Workspace {
   notifications Notification[]
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+  roleRequests RoleRequest[]
 }
 
 enum WorkspaceRole {
   OWNER
+  ADMIN
   EDITOR
   VIEWER
 }
@@ -52,6 +56,26 @@ model WorkspaceMember {
   updatedAt   DateTime      @updatedAt
 
   @@unique([userId, workspaceId])
+}
+
+enum RoleRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model RoleRequest {
+  id           String             @id @default(uuid())
+  workspaceId  String
+  workspace    Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  requesterId  String
+  requester    User               @relation(fields: [requesterId], references: [id], onDelete: Cascade)
+  requestedRole WorkspaceRole
+  status       RoleRequestStatus  @default(PENDING)
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
 }
 
 model Project {
