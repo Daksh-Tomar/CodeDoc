@@ -9,7 +9,7 @@ import { WorkspaceRole, RoleRequestStatus } from '@prisma/client';
 @Injectable()
 export class WorkspaceService extends EventEmitter implements OnModuleDestroy {
   private readonly logger = new Logger(WorkspaceService.name);
-  private readonly workspacesRoot = path.join('c:', 'Users', 'todak', 'Desktop', 'CodeDoc', 'workspaces');
+  private readonly workspacesRoot = process.env.WORKSPACES_ROOT || path.join(process.cwd(), 'workspaces');
   private watchers = new Map<string, chokidar.FSWatcher>();
 
   constructor(private readonly prisma: PrismaService) {
